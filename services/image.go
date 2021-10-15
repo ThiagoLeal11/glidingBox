@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"glidingBox/services/buffers"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -46,13 +47,13 @@ func OpenImage(path string) (image.Image, error) {
 }
 
 // EncodeInterleave Return an interleaved RGB image as an uint8 array.
-func EncodeInterleave(img image.Image) RawImage {
+func EncodeInterleave(img image.Image) buffers.RawImage {
 	// The number of color channels in the image
 	channels := 3
 
 	size := img.Bounds().Size()
 	colorModel := color.NRGBAModel
-	m := MakeRawImage(
+	m := buffers.NewRawImage(
 		[2]int{size.Y, size.X},
 	)
 
@@ -71,6 +72,3 @@ func EncodeInterleave(img image.Image) RawImage {
 
 	return m
 }
-
-
-
