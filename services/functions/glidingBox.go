@@ -2,16 +2,18 @@ package functions
 
 import (
 	"glidingBox/services/buffers"
+	"unsafe"
 )
 
 const (
-	tile      = 128      // The size of each row tile to iterate.
+	tile      = 56 // The size of each row tile to iterate.
+	realTile  = tile * 3
 	innerTile = tile - 1 // -1 is to consider the center overlap
 )
 
 type ComputeTile struct {
-	row        []uint8
-	center     []uint8
+	row        *[realTile]uint8
+	center     *[realTile]uint8
 	kernelSize int
 }
 
@@ -28,8 +30,8 @@ func pixelInsideBox(t *ComputeTile, rowIdx, centerIdx int) uint8 {
 	return 0
 }
 
-func computeCenterDiff(rowBuffer, centerBuffer buffers.Vector, kernelSize int) buffers.Vector {
-	tileSize := rowBuffer.Shape / 3
+func computeCenterDiff(m buffers.RawImage, ry, cy, tx, tl, kernelSize int) buffers.Vector {
+	tileSize := tl
 	radius := kernelSize / 2
 
 	result := buffers.NewVector(tileSize)
@@ -39,8 +41,8 @@ func computeCenterDiff(rowBuffer, centerBuffer buffers.Vector, kernelSize int) b
 	}
 
 	cTile := &ComputeTile{
-		row:        rowBuffer.Data,
-		center:     centerBuffer.Data,
+		row:        (*[realTile]uint8)(unsafe.Pointer(&m.Data[ry][tx*3])),
+		center:     (*[realTile]uint8)(unsafe.Pointer(&m.Data[cy][tx*3])),
 		kernelSize: kernelSize,
 	}
 
@@ -102,12 +104,8 @@ func GlidingBox(m buffers.RawImage, diameter int) []int32 {
 				tileEnd := min(tileStart+tile, width)
 				tileSize := tileEnd - tileStart
 
-				// Start the buffers
-				compBuffer := m.ImageSliceRow(y+l, tileStart, tileSize)
-				centerBuffer := m.ImageSliceRow(y+radius, tileStart, tileSize)
-
 				// Compute the result
-				resultBuffer := computeCenterDiff(compBuffer, centerBuffer, diameter)
+				resultBuffer := computeCenterDiff(m, y+l, y+radius, tileStart, tileSize, diameter)
 
 				// Save the results (start after any overlap grater than one)
 				for x := tileStart; x < tileEnd; x++ {
