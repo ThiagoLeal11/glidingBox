@@ -5,20 +5,24 @@ import (
 )
 
 const (
-	tile      = 56       // The size of each row tile to iterate.
+	tile      = 128      // The size of each row tile to iterate.
 	innerTile = tile - 1 // -1 is to consider the center overlap
 )
 
-// Fast absDiff
-func absDiff(a, b uint8) uint8 {
-	res := int16(a) - int16(b)
-	signBit := res >> ((2 << 3) - 1)
-	value := (res ^ signBit) + (signBit & 1)
-	return uint8(value)
+type ComputeTile struct {
+	row        []uint8
+	center     []uint8
+	kernelSize int
 }
 
-func pixelInsideBox(d0, d1, d2 uint8, kernelSize int) uint8 {
-	if PixelMax(d0, d1, d2) <= uint8(kernelSize) {
+func pixelInsideBox(t *ComputeTile, rowIdx, centerIdx int) uint8 {
+	k := pIdx(rowIdx)
+	c := pIdx(centerIdx)
+	d0 := AbsDiff(t.row[k+0], t.center[c+0])
+	d1 := AbsDiff(t.row[k+1], t.center[c+1])
+	d2 := AbsDiff(t.row[k+2], t.center[c+2])
+
+	if PixelMax(d0, d1, d2) <= uint8(t.kernelSize) {
 		return 1
 	}
 	return 0
@@ -28,56 +32,45 @@ func computeCenterDiff(rowBuffer, centerBuffer buffers.Vector, kernelSize int) b
 	tileSize := rowBuffer.Shape / 3
 	radius := kernelSize / 2
 
-	row := rowBuffer.Data
-	center := centerBuffer.Data
 	result := buffers.NewVector(tileSize)
 
 	if tileSize <= radius {
 		return result
 	}
 
+	cTile := &ComputeTile{
+		row:        rowBuffer.Data,
+		center:     centerBuffer.Data,
+		kernelSize: kernelSize,
+	}
+
 	// First idx in center (c = 0) and jumps the first column
 	for k := 1; k < radius+1; k++ {
-		K := pIdx(k)
-		d0 := absDiff(row[K+0], center[0])
-		d1 := absDiff(row[K+1], center[1])
-		d2 := absDiff(row[K+2], center[2])
-		result.Add(0, pixelInsideBox(d0, d1, d2, kernelSize))
+		mass := pixelInsideBox(cTile, k, 0)
+		result.Add(0, mass)
 	}
 
 	// For each incomplete center box at left
 	for c := 1; c < radius; c++ {
-		C := pIdx(c)
 		for k := 0; k < min(radius+1+c, tileSize); k++ {
-			K := pIdx(k)
-			d0 := absDiff(row[K+0], center[C+0])
-			d1 := absDiff(row[K+1], center[C+1])
-			d2 := absDiff(row[K+2], center[C+2])
-			result.Add(c, pixelInsideBox(d0, d1, d2, kernelSize))
+			mass := pixelInsideBox(cTile, k, c)
+			result.Add(c, mass)
 		}
 	}
 
 	// For each complete center box
 	for c := radius; c < tileSize-radius; c++ {
-		C := pIdx(c)
 		for k := -radius; k < radius+1; k++ {
-			K := C + pIdx(k)
-			d0 := absDiff(row[K+0], center[C+0])
-			d1 := absDiff(row[K+1], center[C+1])
-			d2 := absDiff(row[K+2], center[C+2])
-			result.Add(c, pixelInsideBox(d0, d1, d2, kernelSize))
+			mass := pixelInsideBox(cTile, k+c, c)
+			result.Add(c, mass)
 		}
 	}
 
 	// For each incomplete center box at right
 	for c := max(radius, tileSize-radius); c < tileSize; c++ {
-		C := pIdx(c)
 		for k := c - radius; k < tileSize; k++ {
-			K := pIdx(k)
-			d0 := absDiff(row[K+0], center[C+0])
-			d1 := absDiff(row[K+1], center[C+1])
-			d2 := absDiff(row[K+2], center[C+2])
-			result.Add(c, pixelInsideBox(d0, d1, d2, kernelSize))
+			mass := pixelInsideBox(cTile, k, c)
+			result.Add(c, mass)
 		}
 	}
 
@@ -89,6 +82,7 @@ func GlidingBox(m buffers.RawImage, diameter int) []int32 {
 	height, width := m.GetShape()
 
 	// Create the temp results vector
+	results := make([]int32, width)
 	occurrences := make([]int32, diameter*diameter)
 
 	radius := diameter / 2
@@ -96,7 +90,7 @@ func GlidingBox(m buffers.RawImage, diameter int) []int32 {
 
 	// For each line
 	for y := 0; y < height-diameter+1; y++ {
-		results := make([]int32, width)
+		ClearArray(results)
 
 		// For each row of the box
 		for l := 0; l < diameter; l++ {
