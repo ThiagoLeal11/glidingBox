@@ -17,6 +17,6 @@ func NewRawImage(shape [2]int) RawImage {
 	}
 }
 
-func (m *RawImage) SliceRow(y, x, size int) Vector {
+func (m *RawImage) ImageSliceRow(y, x, size int) Vector {
 	return m.SliceRow(y, x*3, size*3)
 }
