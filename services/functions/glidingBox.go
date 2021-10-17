@@ -101,8 +101,12 @@ func GlidingBox(m buffers.RawImage, diameter int) []int32 {
 	var sim int32
 
 	// For each line
-	for y := 0; y < height-diameter; y++ {
+	for y := 0; y < height-diameter+1; y++ {
 		results := make([]int32, width)
+
+		if y == 519 {
+			fmt.Printf("")
+		}
 
 		// For each row of the box
 		for l := 0; l < diameter; l++ {
@@ -150,7 +154,7 @@ func GlidingBox(m buffers.RawImage, diameter int) []int32 {
 			//fmt.Printf("%d ", results[i]-1)
 			occurrences[results[i]-1]++
 		}
-		fmt.Print("")
+		fmt.Println(occurrences)
 	}
 
 	fmt.Println(sim)
