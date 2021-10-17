@@ -19,3 +19,7 @@ func (a *Vector) At(x int) uint8 {
 func (a *Vector) Set(x int, value uint8) {
 	a.Data[x] = value
 }
+
+func (a *Vector) Add(x int, value uint8) {
+	a.Data[x] += value
+}
