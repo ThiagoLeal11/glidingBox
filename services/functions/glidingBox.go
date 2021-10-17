@@ -26,7 +26,8 @@ func pixelInsideBox(d0, d1, d2 uint8, kernelSize int) uint8 {
 }
 
 func computeCenterDiff(rowBuffer, centerBuffer buffers.Vector, kernelSize int) buffers.Vector {
-	result := buffers.NewVector(rowBuffer.Shape / 3)
+	tileSize := rowBuffer.Shape / 3
+	result := buffers.NewVector(tileSize)
 
 	row := rowBuffer.Data
 	center := centerBuffer.Data
@@ -54,7 +55,7 @@ func computeCenterDiff(rowBuffer, centerBuffer buffers.Vector, kernelSize int) b
 	}
 
 	// For each complete center box
-	for c := radius; c < tile-radius; c++ {
+	for c := radius; c < tileSize-radius; c++ {
 		C := pIdx(c)
 		if c == 52 {
 			print("")
@@ -69,9 +70,9 @@ func computeCenterDiff(rowBuffer, centerBuffer buffers.Vector, kernelSize int) b
 	}
 
 	// For each incomplete center box at right
-	for c := tile - radius; c < tile; c++ {
+	for c := tileSize - radius; c < tileSize; c++ {
 		C := pIdx(c)
-		for k := c - radius; k < tile; k++ {
+		for k := c - radius; k < tileSize; k++ {
 			K := pIdx(k)
 			d0 := absDiff(row[K+0], center[C+0])
 			d1 := absDiff(row[K+1], center[C+1])
@@ -81,15 +82,6 @@ func computeCenterDiff(rowBuffer, centerBuffer buffers.Vector, kernelSize int) b
 	}
 
 	return result
-}
-
-func contains(list []int, value int) bool {
-	for _, l := range list {
-		if l == value {
-			return true
-		}
-	}
-	return false
 }
 
 // GlidingBox convoluted the image with a box of size radius
@@ -102,6 +94,8 @@ func GlidingBox(m buffers.RawImage, diameter int) []int32 {
 	radius := diameter / 2
 	numberOfTiles := ceil(floatDivision(width, innerTile))
 
+	var sim int32
+
 	// For each line
 	for y := 0; y < height-diameter; y++ {
 		results := make([]int32, width)
@@ -111,38 +105,39 @@ func GlidingBox(m buffers.RawImage, diameter int) []int32 {
 
 			// For each tile in a row
 			for t := 0; t < numberOfTiles; t++ {
-				// Compute the start of the tile (the tile is always completely inside the image)
-				expectedStart := t * (innerTile)
-				start := min(expectedStart, width-tile)
+				// Compute the tile properties
+				tileStart := t * (innerTile)
+				tileEnd := min(tileStart+tile, width)
+				tileSize := tileEnd - tileStart
 
 				if t == 14 {
 					print("")
 				}
 
 				// Start the buffers
-				compBuffer := m.ImageSliceRow(y+l, start, tile)
-				centerBuffer := m.ImageSliceRow(y+radius, start, tile)
+				compBuffer := m.ImageSliceRow(y+l, tileStart, tileSize)
+				centerBuffer := m.ImageSliceRow(y+radius, tileStart, tileSize)
 
 				// Compute the result
 				resultBuffer := computeCenterDiff(compBuffer, centerBuffer, diameter)
 
 				// Save the results (start after any overlap grater than one)
-				for x := expectedStart; x < start+tile; x++ {
+				for x := tileStart; x < tileEnd; x++ {
 					if x == 770 && y == 3 {
 						fmt.Printf("")
 					}
-					resultIdx := x - start
+					resultIdx := x - tileStart
 					value := int32(resultBuffer.At(resultIdx))
 					results[x] += value
 					r := results[x]
-					fmt.Print(r)
+					sim = r
 				}
 			}
 		}
 
 		for i := radius; i < width-radius; i++ {
 			if results[i]-1 == 4 {
-				fmt.Printf("%d ", i)
+				//fmt.Printf("%d ", i)
 			}
 		}
 
@@ -153,6 +148,8 @@ func GlidingBox(m buffers.RawImage, diameter int) []int32 {
 		}
 		fmt.Println("")
 	}
+
+	fmt.Println(sim)
 
 	return occurrences
 }
