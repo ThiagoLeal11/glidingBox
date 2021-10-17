@@ -27,11 +27,15 @@ func pixelInsideBox(d0, d1, d2 uint8, kernelSize int) uint8 {
 
 func computeCenterDiff(rowBuffer, centerBuffer buffers.Vector, kernelSize int) buffers.Vector {
 	tileSize := rowBuffer.Shape / 3
-	result := buffers.NewVector(tileSize)
+	radius := kernelSize / 2
 
 	row := rowBuffer.Data
 	center := centerBuffer.Data
-	radius := kernelSize / 2
+	result := buffers.NewVector(tileSize)
+
+	if tileSize <= radius {
+		return result
+	}
 
 	// First idx in center (c = 0) and jumps the first column
 	for k := 1; k < radius+1; k++ {
@@ -45,7 +49,7 @@ func computeCenterDiff(rowBuffer, centerBuffer buffers.Vector, kernelSize int) b
 	// For each incomplete center box at left
 	for c := 1; c < radius; c++ {
 		C := pIdx(c)
-		for k := 0; k < radius+1+c; k++ {
+		for k := 0; k < min(radius+1+c, tileSize); k++ {
 			K := pIdx(k)
 			d0 := absDiff(row[K+0], center[C+0])
 			d1 := absDiff(row[K+1], center[C+1])
@@ -70,7 +74,7 @@ func computeCenterDiff(rowBuffer, centerBuffer buffers.Vector, kernelSize int) b
 	}
 
 	// For each incomplete center box at right
-	for c := tileSize - radius; c < tileSize; c++ {
+	for c := max(radius, tileSize-radius); c < tileSize; c++ {
 		C := pIdx(c)
 		for k := c - radius; k < tileSize; k++ {
 			K := pIdx(k)
@@ -146,7 +150,7 @@ func GlidingBox(m buffers.RawImage, diameter int) []int32 {
 			//fmt.Printf("%d ", results[i]-1)
 			occurrences[results[i]-1]++
 		}
-		fmt.Println("")
+		fmt.Print("")
 	}
 
 	fmt.Println(sim)
