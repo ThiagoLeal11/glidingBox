@@ -32,8 +32,6 @@ func (m *Matrix) Set(y, x int, value uint8) {
 
 func (m *Matrix) SliceRow(y, x, size int) Vector {
 	slice := NewVector(size)
-	for k := 0; k < size; k++ {
-		slice.Data[k] = m.Data[y][x+k]
-	}
+	slice.Data = m.Data[y][x : x+size]
 	return slice
 }
