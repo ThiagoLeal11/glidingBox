@@ -58,15 +58,16 @@ func EncodeInterleave(img image.Image) buffers.RawImage {
 	)
 
 	for y := 0; y < size.Y; y++ {
-		for x := 0; x < size.X; x += channels {
+		for x := 0; x < size.X; x++ {
 			// Reshape tensor (Y, X, channels into: Y, X * channels)
-			pixel := img.At(x/channels, y)
+			pixel := img.At(x, y)
 			result := colorModel.Convert(pixel)
 			r, g, b, _ := result.RGBA()
 
-			m.Set(y, x+0, uint8(r))
-			m.Set(y, x+1, uint8(g))
-			m.Set(y, x+2, uint8(b))
+			X := x * channels
+			m.Set(y, X+0, uint8(r))
+			m.Set(y, X+1, uint8(g))
+			m.Set(y, X+2, uint8(b))
 		}
 	}
 
