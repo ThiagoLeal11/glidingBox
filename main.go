@@ -1,50 +1,94 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"glidingBox/services"
-	"glidingBox/services/functions"
-	"time"
+	"glidingBox/src"
+	"io/fs"
+	"io/ioutil"
+	"log"
 )
 
-func main() {
-	img, err := services.OpenImage("/home/thiago/go/src/glidingBox/assets/Benign (1).png")
+type ResultKernels struct {
+	Probabilities []float64 `json:"probabilities"`
+	KernelSize    int       `json:"kernel_size"`
+}
+
+type ResultLine struct {
+	Name    string          `json:"name"`
+	Results []ResultKernels `json:"result_kernels"`
+}
+
+func ProcessAnImage(inputDir string, file fs.FileInfo) []ResultKernels {
+	fmt.Printf("Processango imagem %s\n", file.Name())
+	kernelStart := 3
+	kernelEnd := 45
+	kernelNumber := (kernelEnd-kernelStart)/2 + 1
+
+	filePath := inputDir + file.Name()
+	img, err := services.OpenImage(filePath)
 	if err != nil {
+		log.Fatal(err)
+	}
+
+	var results []ResultKernels
+
+	sem := make(chan ResultKernels, kernelNumber)
+
+	image := src.EncodeInterleave(img)
+	for i := 0; i < kernelNumber; i++ {
+		go func(i, kernelStart int) {
+			kernelSize := kernelStart + i*2
+			probabilities := src.GlidingBoxSimple(image, kernelSize)
+			sem <- ResultKernels{
+				Probabilities: probabilities,
+				KernelSize:    kernelSize,
+			}
+		}(i, kernelStart)
+	}
+
+	fmt.Print("Concluídos: ")
+
+	for i := 0; i < kernelNumber; i++ {
+		r := <-sem
+		fmt.Printf("%d ", r.KernelSize)
+		results = append(results, r)
+	}
+	fmt.Print("\n")
+	return results
+}
+
+func main() {
+	// Configures input and output files.
+	inputDir := "/home/thiago/go/src/glidingBox/assets/"
+	outputFile := "/home/thiago/go/src/glidingBox/results/out.json"
+
+	// Read all files inside input dir
+	files, err := ioutil.ReadDir(inputDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Iterate over all images
+	var results []ResultLine
+	for _, f := range files {
+		results = append(results, ResultLine{
+			Name:    f.Name(),
+			Results: ProcessAnImage(inputDir, f),
+		})
+	}
+
+	// Export to json
+	b, err := json.Marshal(results)
+	if err != nil {
+		fmt.Println(err)
 		return
 	}
 
-	start := time.Now()
-	image := services.EncodeInterleave(img)
-
-	kernelStart := 3
-	kernelEnd := 3
-	kernelNumber := (kernelEnd-kernelStart)/2 + 1
-
-	//data := make([]int32, kernelNumber)
-	//sem := make(chan int, kernelNumber)
-
-	// Make in parallel
-	for i := 0; i < kernelNumber; i++ {
-		//go func(kernelIdx, kernelStart int) {
-		kernelSize := kernelStart + i*2
-		fmt.Println(kernelSize)
-		results := functions.GlidingBox(image, kernelSize)
-		t := time.Now()
-		elapsed := t.Sub(start)
-		fmt.Println(elapsed)
-		baseResult := functions.GlidingBoxSimple(image, kernelSize)
-		//sem <- 1
-		fmt.Println(results)
-		fmt.Println(baseResult)
-		//}(i, kernelStart)
+	permissions := 0644
+	err = ioutil.WriteFile(outputFile, b, fs.FileMode(permissions))
+	if err != nil {
+		fmt.Println(err)
 	}
-
-	// Wait for goroutines to finish
-	//for i := 0; i < kernelNumber; i++ {
-	//	<- sem
-	//}
-
-	t := time.Now()
-	elapsed := t.Sub(start)
-	fmt.Println(elapsed)
 }

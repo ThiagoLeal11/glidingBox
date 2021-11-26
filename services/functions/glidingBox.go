@@ -40,6 +40,7 @@ func computeCenterDiff(m buffers.RawImage, ry, cy, tx, tl, kernelSize int) buffe
 		return result
 	}
 
+	// todo: remover cópia dos índices (passar tudo como linha e o íncice que começa e o tamanho)
 	cTile := &ComputeTile{
 		row:        (*[realTile]uint8)(unsafe.Pointer(&m.Data[ry][tx*3])),
 		center:     (*[realTile]uint8)(unsafe.Pointer(&m.Data[cy][tx*3])),
@@ -135,16 +136,13 @@ func GlidingBoxSimple(m buffers.RawImage, diameter int) []int32 {
 			mass := 0
 			for j := y - radius; j < y+radius+1; j++ {
 				for i := x - radius; i < x+radius+1; i++ {
-					if j == y && i == x {
-						continue
-					}
 					pixel := m.GetPixel(j, i)
 					if buffers.MaxPixel(pixel.MinusAbs(central)) <= uint8(diameter) {
 						mass += 1
 					}
 				}
 			}
-			occurrences[mass] += 1
+			occurrences[mass-1] += 1
 		}
 	}
 
