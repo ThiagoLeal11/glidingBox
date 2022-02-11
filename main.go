@@ -23,7 +23,7 @@ type ResultLine struct {
 func ProcessAnImage(inputDir string, file fs.FileInfo) []ResultKernels {
 	fmt.Printf("Processango imagem %s\n", file.Name())
 	kernelStart := 3
-	kernelEnd := 45
+	kernelEnd := 41
 	kernelNumber := (kernelEnd-kernelStart)/2 + 1
 
 	filePath := inputDir + file.Name()
@@ -59,10 +59,9 @@ func ProcessAnImage(inputDir string, file fs.FileInfo) []ResultKernels {
 	return results
 }
 
-func main() {
-	// Configures input and output files.
-	inputDir := "/home/thiago/go/src/glidingBox/assets/"
-	outputFile := "/home/thiago/go/src/glidingBox/results/out.json"
+func processDir(inputDir string, outputFileName string){
+	
+	outputFile := inputDir + outputFileName
 
 	// Read all files inside input dir
 	files, err := ioutil.ReadDir(inputDir)
@@ -91,4 +90,15 @@ func main() {
 	if err != nil {
 		fmt.Println(err)
 	}
+}
+
+func main() {
+
+
+	inputDir := "Full-folder-path"
+	outputFile := "probability-matrix.json"
+
+	processDir(inputDir,outputFile)
+
+	
 }

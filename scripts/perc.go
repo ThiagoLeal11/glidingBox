@@ -18,9 +18,9 @@ type ResultLine struct {
 }
 
 func ProcessAnImage(inputDir string, file fs.FileInfo) []src.LocalPercolationData {
-	fmt.Printf("Processango imagem %s\n", file.Name())
+	fmt.Printf("Processando imagem %s\n", file.Name())
 	kernelStart := 3
-	kernelEnd := 45
+	kernelEnd := 41
 	kernelNumber := (kernelEnd-kernelStart)/2 + 1
 
 	filePath := inputDir + file.Name()
@@ -54,27 +54,24 @@ func ProcessAnImage(inputDir string, file fs.FileInfo) []src.LocalPercolationDat
 	return results
 }
 
-func main() {
-	start := time.Now()
+func processDir(inputDir string, outputFile string){
 	runtime.GOMAXPROCS(4)
-
-	// Configures input and output files.
-	inputDir := "/home/thiago/go/src/glidingBox/assets/"
-	outputFile := "/home/thiago/go/src/glidingBox/results/out.json"
-
+	
 	// Read all files inside input dir
 	files, err := ioutil.ReadDir(inputDir)
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	
 	// Iterate over all images
 	var results []ResultLine
 	for _, f := range files {
+		start := time.Now()
 		results = append(results, ResultLine{
 			Name:    f.Name(),
 			Results: ProcessAnImage(inputDir, f),
 		})
+		fmt.Printf("Elapsed time %v\n", time.Now().Sub(start))
 	}
 
 	// Export to json
@@ -90,5 +87,12 @@ func main() {
 		fmt.Println(err)
 	}
 
-	fmt.Printf("Elapsed time %v", time.Now().Sub(start))
+}
+
+func main() {
+
+	inputDir := "Full-folder-path"
+	outputFile := "percolation-data.json"
+
+	processDir(inputDir,outputFile)		
 }
