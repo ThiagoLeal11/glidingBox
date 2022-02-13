@@ -36,7 +36,7 @@ func clusterize(b buffers.Matrix, c buffers.Matrix) (int, int) {
 	height, width := b.GetShape()
 	currentLabel := 1
 
-	max := 0
+	biggestClusterSize := 0
 
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
@@ -45,9 +45,9 @@ func clusterize(b buffers.Matrix, c buffers.Matrix) (int, int) {
 			}
 
 			if c.At(y, x) == 0 {
-				candidate := labelClusters(b, c, x, y, currentLabel)
-				if candidate > max {
-					max = candidate
+				clusterSize := labelClusters(b, c, x, y, currentLabel)
+				if clusterSize > biggestClusterSize {
+					biggestClusterSize = clusterSize
 				}
 
 				currentLabel++
@@ -55,7 +55,7 @@ func clusterize(b buffers.Matrix, c buffers.Matrix) (int, int) {
 		}
 	}
 
-	return currentLabel - 1, max
+	return currentLabel - 1, biggestClusterSize
 }
 
 func PercolationSimple(m buffers.Image, diameter int) LocalPercolationData {
@@ -65,7 +65,7 @@ func PercolationSimple(m buffers.Image, diameter int) LocalPercolationData {
 	boxCount := (width - diameter + 1) * (height - diameter + 1)
 
 	clusterCounts := make([]int, boxCount)
-	biggestClusterAreas := make([]int, boxCount)
+	biggestClusterAreas := make([]float64, boxCount)
 	percolationBoxCounters := 0
 
 	region := buffers.NewMatrix([2]int{diameter, diameter})
@@ -73,7 +73,7 @@ func PercolationSimple(m buffers.Image, diameter int) LocalPercolationData {
 
 	idx := 0
 
-	boxArea := diameter * diameter
+	boxArea := float64(diameter * diameter)	
 
 	for y := radius; y < height-radius; y++ {
 		for x := radius; x < width-radius; x++ {
@@ -98,19 +98,18 @@ func PercolationSimple(m buffers.Image, diameter int) LocalPercolationData {
 			}
 			clustersOnBox, biggestClusterSize := clusterize(region, clusters)
 			clusterCounts[idx] = clustersOnBox
-			biggestClusterAreas[idx] = biggestClusterSize / boxArea
+			biggestClusterAreas[idx] = float64(biggestClusterSize) / boxArea
 			idx++
 
-			if float64(percolatingPixels/boxArea) >= 0.59275 {
+			if float64(percolatingPixels)/boxArea >= 0.59275 {
 				percolationBoxCounters += 1
 			}
-
 		}
 	}
 
 	// Compute the statistics
-	boxAverageClusterCount := mean(clusterCounts)
-	boxAverageBiggestClusterArea := mean(biggestClusterAreas)
+	boxAverageClusterCount := meanOfInt(clusterCounts)
+	boxAverageBiggestClusterArea := meanOfFloat(biggestClusterAreas)
 	boxPercolation := float64(percolationBoxCounters) / float64(boxCount)
 
 	return LocalPercolationData{
@@ -128,11 +127,20 @@ type LocalPercolationData struct {
 	KernelSize                int     `json:"kernel_size"`
 }
 
-func mean(v []int) float64 {
+func meanOfInt(v []int) float64 {
 	acc := 0
 	for _, value := range v {
 		acc += value
 	}
 
 	return float64(acc) / float64(len(v))
+}
+
+func meanOfFloat(v []float64) float64 {
+	acc := 0.0
+	for _, value := range v {
+		acc += value
+	}
+
+	return acc / float64(len(v))
 }
