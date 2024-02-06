@@ -17,17 +17,15 @@ type ResultKernels struct {
 
 type ResultLine struct {
 	Name    string          `json:"name"`
+	Parent  string          `json:"folder"`
 	Results []ResultKernels `json:"result_kernels"`
 }
 
-func ProcessAnImage(inputDir string, file fs.FileInfo) []ResultKernels {
-	fmt.Printf("Processango imagem %s\n", file.Name())
-	kernelStart := 3
-	kernelEnd := 41
+func ProcessAnImage(folderPath string, file fs.FileInfo, kernelStart int,  kernelEnd int) ResultLine {
 	kernelNumber := (kernelEnd-kernelStart)/2 + 1
 
-	filePath := inputDir + file.Name()
-	img, err := services.OpenImage(filePath)
+	path := folderPath + file.Name()
+	img, err := services.OpenImage(path)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -56,28 +54,46 @@ func ProcessAnImage(inputDir string, file fs.FileInfo) []ResultKernels {
 		results = append(results, r)
 	}
 	fmt.Print("\n")
-	return results
+	return ResultLine {
+		Name: file.Name(),
+		Parent: folderPath,
+		Results: results ,
+	}
 }
 
-func processDir(inputDir string, outputFileName string){
+func processDir(path string, kernelStart int,  kernelEnd int, processChildren bool) []ResultLine {
 	
-	outputFile := inputDir + outputFileName
-
 	// Read all files inside input dir
-	files, err := ioutil.ReadDir(inputDir)
+	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	totalFiles := len(files)
+	fmt.Printf("Processing %s (%d files)\n", path, totalFiles)
+
 	// Iterate over all images
 	var results []ResultLine
-	for _, f := range files {
-		results = append(results, ResultLine{
-			Name:    f.Name(),
-			Results: ProcessAnImage(inputDir, f),
-		})
+	for idx, f := range files {
+		if f.IsDir() {
+			if !processChildren {
+				continue
+			}
+			childPath := path + f.Name() + "/"
+			childResult := processDir(childPath, kernelStart, kernelEnd, processChildren)
+			results = append(results, childResult...)
+
+		} else {
+			fmt.Printf("[%d/%d] %s\n", idx+1, totalFiles, f.Name())
+			results = append(results, ProcessAnImage(path, f, kernelStart, kernelEnd))
+		}
 	}
 
+	return results
+}
+
+
+func SaveResults(results []ResultLine, filename string) {
 	// Export to json
 	b, err := json.Marshal(results)
 	if err != nil {
@@ -86,7 +102,7 @@ func processDir(inputDir string, outputFileName string){
 	}
 
 	permissions := 0644
-	err = ioutil.WriteFile(outputFile, b, fs.FileMode(permissions))
+	err = ioutil.WriteFile(filename, b, fs.FileMode(permissions))
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -95,10 +111,11 @@ func processDir(inputDir string, outputFileName string){
 func main() {
 
 
-	inputDir := "Full-folder-path"
+	inputDir := "Full-folder-path/"
 	outputFile := "probability-matrix.json"
 
-	processDir(inputDir,outputFile)
+	results := processDir(inputDir, 3, 41, true)
 
-	
+	SaveResults(results, outputFile)
+
 }

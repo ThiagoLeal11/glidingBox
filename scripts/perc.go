@@ -14,16 +14,14 @@ import (
 
 type ResultLine struct {
 	Name    string                     `json:"name"`
+	Parent  string          		   `json:"folder"`
 	Results []src.LocalPercolationData `json:"percolation_results"`
 }
 
-func ProcessAnImage(inputDir string, file fs.FileInfo) []src.LocalPercolationData {
-	fmt.Printf("Processando imagem %s\n", file.Name())
-	kernelStart := 3
-	kernelEnd := 41
+func ProcessAnImage(folderPath string, file fs.FileInfo, kernelStart int,  kernelEnd int) ResultLine {
 	kernelNumber := (kernelEnd-kernelStart)/2 + 1
 
-	filePath := inputDir + file.Name()
+	filePath := folderPath + file.Name()
 	img, err := services.OpenImage(filePath)
 	if err != nil {
 		log.Fatal(err)
@@ -51,29 +49,48 @@ func ProcessAnImage(inputDir string, file fs.FileInfo) []src.LocalPercolationDat
 		results = append(results, r)
 	}
 	fmt.Print("\n")
-	return results
+	return ResultLine{
+		Name: file.Name(),
+		Parent: folderPath,
+		Results: results ,
+	}
 }
 
-func processDir(inputDir string, outputFile string){
+func processDir(path string, kernelStart int,  kernelEnd int, processChildren bool) []ResultLine {
 	runtime.GOMAXPROCS(4)
 	
 	// Read all files inside input dir
-	files, err := ioutil.ReadDir(inputDir)
+	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Fatal(err)
 	}
 	
+	totalFiles := len(files)
+	fmt.Printf("Processing %s (%d files)\n", path, totalFiles)
+	
 	// Iterate over all images
 	var results []ResultLine
-	for _, f := range files {
-		start := time.Now()
-		results = append(results, ResultLine{
-			Name:    f.Name(),
-			Results: ProcessAnImage(inputDir, f),
-		})
-		fmt.Printf("Elapsed time %v\n", time.Now().Sub(start))
+	for idx, f := range files {
+		if f.IsDir() {
+			if !processChildren {
+				continue
+			}
+			childPath := path + f.Name() + "/"
+			childResult := processDir(childPath, kernelStart, kernelEnd, processChildren)
+			results = append(results, childResult...)
+
+		} else {
+			fmt.Printf("[%d/%d] %s\n", idx+1, totalFiles, f.Name())
+			start := time.Now()
+			results = append(results, ProcessAnImage(path, f, kernelStart, kernelEnd))
+			fmt.Printf("Elapsed time %v\n", time.Now().Sub(start))
+		}
 	}
 
+	return results
+}
+
+func SaveResults(results []ResultLine, filename string) {
 	// Export to json
 	b, err := json.Marshal(results)
 	if err != nil {
@@ -82,17 +99,18 @@ func processDir(inputDir string, outputFile string){
 	}
 
 	permissions := 0644
-	err = ioutil.WriteFile(outputFile, b, fs.FileMode(permissions))
+	err = ioutil.WriteFile(filename, b, fs.FileMode(permissions))
 	if err != nil {
 		fmt.Println(err)
 	}
-
 }
 
 func main() {
 
-	inputDir := "Full-folder-path"
+	inputDir := "Full-folder-path/"
 	outputFile := "percolation-data.json"
 
-	processDir(inputDir,outputFile)		
+	results := processDir(inputDir, 3, 41, true)
+
+	SaveResults(results, outputFile)
 }
