@@ -8,17 +8,18 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"log"
+	"math"
 	"runtime"
 	"time"
 )
 
 type ResultLine struct {
 	Name    string                     `json:"name"`
-	Parent  string          		   `json:"folder"`
+	Parent  string                     `json:"folder"`
 	Results []src.LocalPercolationData `json:"percolation_results"`
 }
 
-func ProcessAnImage(folderPath string, file fs.FileInfo, kernelStart int,  kernelEnd int) ResultLine {
+func processAnImage(folderPath string, file fs.FileInfo, kernelStart int, kernelEnd int) ResultLine {
 	kernelNumber := (kernelEnd-kernelStart)/2 + 1
 
 	filePath := folderPath + file.Name()
@@ -50,47 +51,78 @@ func ProcessAnImage(folderPath string, file fs.FileInfo, kernelStart int,  kerne
 	}
 	fmt.Print("\n")
 	return ResultLine{
-		Name: file.Name(),
-		Parent: folderPath,
-		Results: results ,
+		Name:    file.Name(),
+		Parent:  folderPath,
+		Results: results,
 	}
 }
 
-func processDir(path string, kernelStart int,  kernelEnd int, processChildren bool) []ResultLine {
+func processBatch(batch []fs.FileInfo, folderPath string, kernelStart int, kernelEnd int, includeChildren bool) []ResultLine {
+	var results []ResultLine
+	batchSize := len(batch)
+	for idx, f := range batch {
+		fmt.Printf("[%d/%d] %s\n", idx+1, batchSize, f.Name())
+		if f.IsDir() {
+			if !includeChildren {
+				continue
+			}
+			childPath := fmt.Sprintf("%s%s/", folderPath, f.Name())
+			childResult := processChild(childPath, kernelStart, kernelEnd)
+			results = append(results, childResult...)
+			continue
+		}
+
+		start := time.Now()
+		results = append(results, processAnImage(folderPath, f, kernelStart, kernelEnd))
+		fmt.Printf("Elapsed time %v\n", time.Since(start))
+	}
+	return results
+}
+
+func processChild(path string, kernelStart int, kernelEnd int) []ResultLine {
+	files, err := ioutil.ReadDir(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+	totalFiles := len(files)
+	fmt.Printf("Processing %s (%d files)\n", path, totalFiles)
+	return processBatch(files, path, kernelStart, kernelEnd, true)
+}
+
+func processDir(path string, kernelStart int, kernelEnd int, processChildren bool, batchSize int, outputFile string, includeChildren bool) {
+
 	runtime.GOMAXPROCS(4)
-	
+
 	// Read all files inside input dir
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	totalFiles := len(files)
 	fmt.Printf("Processing %s (%d files)\n", path, totalFiles)
-	
-	// Iterate over all images
-	var results []ResultLine
-	for idx, f := range files {
-		if f.IsDir() {
-			if !processChildren {
-				continue
-			}
-			childPath := path + f.Name() + "/"
-			childResult := processDir(childPath, kernelStart, kernelEnd, processChildren)
-			results = append(results, childResult...)
 
-		} else {
-			fmt.Printf("[%d/%d] %s\n", idx+1, totalFiles, f.Name())
-			start := time.Now()
-			results = append(results, ProcessAnImage(path, f, kernelStart, kernelEnd))
-			fmt.Printf("Elapsed time %v\n", time.Now().Sub(start))
-		}
+	batches := [][]fs.FileInfo{files}
+	if batchSize > 0 {
+		batches = getBatches(files, batchSize)
+		fmt.Printf("Split process in %d batches\n", len(batches))
 	}
+	batchCount := len(batches)
 
-	return results
+	for idx, batch := range batches {
+		outputName := outputFile
+
+		if batchCount > 1 {
+			fmt.Printf("Processing batch %d of %d\n", idx+1, batchCount)
+			outputName = fmt.Sprintf("(%d of %d) %s", idx+1, batchCount, outputFile)
+		}
+
+		result := processBatch(batch, path, kernelStart, kernelEnd, includeChildren)
+		saveResults(result, outputName)
+	}
 }
 
-func SaveResults(results []ResultLine, filename string) {
+func saveResults(results []ResultLine, filename string) {
 	// Export to json
 	b, err := json.Marshal(results)
 	if err != nil {
@@ -105,12 +137,27 @@ func SaveResults(results []ResultLine, filename string) {
 	}
 }
 
+func getBatches(arr []fs.FileInfo, batchSize int) [][]fs.FileInfo {
+	total := len(arr)
+	batchCount := int(math.Ceil(float64(total) / float64(batchSize)))
+	var batches [][]fs.FileInfo
+
+	for idx := 0; idx < batchCount; idx++ {
+		startingIdx := idx * batchSize
+		endingIdx := startingIdx + batchSize
+		if endingIdx > total {
+			endingIdx = total
+		}
+		batches = append(batches, arr[startingIdx:endingIdx])
+	}
+
+	return batches
+}
+
 func main() {
 
 	inputDir := "Full-folder-path/"
 	outputFile := "percolation-data.json"
 
-	results := processDir(inputDir, 3, 41, true)
-
-	SaveResults(results, outputFile)
+	processDir(inputDir, 3, 41, true, 2, outputFile, true)
 }
